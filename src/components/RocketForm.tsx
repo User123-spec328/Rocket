@@ -2,8 +2,8 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { LaunchParameters, RocketSpecifications } from '../types/rocket';
-import { Rocket, MapPin, Settings, Zap, Weight, Clock, Gauge } from 'lucide-react';
+import { LaunchParameters } from '../types/rocket';
+import { Rocket, MapPin, Settings, Zap, Weight, Clock, Gauge, Flame, Target } from 'lucide-react';
 
 const schema = yup.object().shape({
   latitude: yup.number().min(-90).max(90).required('Latitude is required'),
@@ -11,11 +11,14 @@ const schema = yup.object().shape({
   orbitHeight: yup.number().min(0).max(1000).required('Orbit height is required'),
   rocketSpecs: yup.object().shape({
     mass: yup.number().min(1).required('Mass is required'),
-    thrust: yup.number().min(1).required('Thrust is required'),
+    stageSeparationMass: yup.number().min(1).required('Stage separation mass is required'),
     dragCoefficient: yup.number().min(0).max(1).required('Drag coefficient is required'),
-    burnTime: yup.number().min(1).required('Burn time is required'),
-    stageSeparationMass: yup.number().min(0).required('Stage separation mass is required'),
-    isp: yup.number().min(1).required('ISP is required')
+    stage1BurnTime: yup.number().min(1).required('Stage 1 burn time is required'),
+    stage1Thrust: yup.number().min(1).required('Stage 1 thrust is required'),
+    stage1ISP: yup.number().min(1).required('Stage 1 ISP is required'),
+    stage2BurnTime: yup.number().min(1).required('Stage 2 burn time is required'),
+    stage2Thrust: yup.number().min(1).required('Stage 2 thrust is required'),
+    stage2ISP: yup.number().min(1).required('Stage 2 ISP is required')
   })
 });
 
@@ -25,7 +28,7 @@ interface RocketFormProps {
 }
 
 export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = false }) => {
-  const { register, handleSubmit, formState: { errors }, watch } = useForm<LaunchParameters>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LaunchParameters>({
     resolver: yupResolver(schema),
     defaultValues: {
       latitude: 28.5721,
@@ -33,16 +36,17 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
       orbitHeight: 400,
       rocketSpecs: {
         mass: 549054,
-        thrust: 7607000,
-        dragCoefficient: 0.3,
-        burnTime: 162,
         stageSeparationMass: 131000,
-        isp: 282
+        dragCoefficient: 0.3,
+        stage1BurnTime: 162,
+        stage1Thrust: 7607000,
+        stage1ISP: 282,
+        stage2BurnTime: 397,
+        stage2Thrust: 934000,
+        stage2ISP: 421
       }
     }
   });
-
-  const formData = watch();
 
   const inputClasses = `
     w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg
@@ -67,15 +71,15 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   `;
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="bg-black border border-gray-800 rounded-2xl p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-8">
           <div className="p-3 bg-red-600 rounded-lg">
             <Rocket className="w-8 h-8 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Rocket Simulation Parameters</h2>
-            <p className="text-gray-400">Configure your rocket launch specifications</p>
+            <h2 className="text-2xl font-bold text-white">Two-Stage Rocket Configuration</h2>
+            <p className="text-gray-400">Configure your rocket launch specifications with dual-stage parameters</p>
           </div>
         </div>
 
@@ -117,7 +121,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
               </div>
               <div>
                 <label className={labelClasses}>
-                  Orbit Height (km)
+                  Target Orbit Height (km)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -137,11 +141,11 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
               <Settings className="w-5 h-5 text-red-500" />
               <h3 className="text-xl font-semibold text-white">Rocket Specifications</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className={labelClasses}>
                   <Weight className="w-4 h-4" />
-                  Mass (kg)
+                  Total Initial Mass (kg)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -154,17 +158,17 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
               </div>
               <div>
                 <label className={labelClasses}>
-                  <Zap className="w-4 h-4" />
-                  Thrust (N)
+                  <Weight className="w-4 h-4" />
+                  Stage Separation Mass (kg)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="number"
                   className={inputClasses}
-                  placeholder="7607000"
-                  {...register('rocketSpecs.thrust')}
+                  placeholder="131000"
+                  {...register('rocketSpecs.stageSeparationMass')}
                 />
-                {errors.rocketSpecs?.thrust && <p className={errorClasses}>{errors.rocketSpecs.thrust.message}</p>}
+                {errors.rocketSpecs?.stageSeparationMass && <p className={errorClasses}>{errors.rocketSpecs.stageSeparationMass.message}</p>}
               </div>
               <div>
                 <label className={labelClasses}>
@@ -181,47 +185,109 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                 />
                 {errors.rocketSpecs?.dragCoefficient && <p className={errorClasses}>{errors.rocketSpecs.dragCoefficient.message}</p>}
               </div>
+            </div>
+          </div>
+
+          {/* Stage 1 Details */}
+          <div className={sectionClasses}>
+            <div className="flex items-center gap-2 mb-6">
+              <Flame className="w-5 h-5 text-orange-500" />
+              <h3 className="text-xl font-semibold text-white">Stage 1 Details</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className={labelClasses}>
                   <Clock className="w-4 h-4" />
-                  Burn Time (s)
+                  Stage 1 Burn Time (s)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="number"
                   className={inputClasses}
                   placeholder="162"
-                  {...register('rocketSpecs.burnTime')}
+                  {...register('rocketSpecs.stage1BurnTime')}
                 />
-                {errors.rocketSpecs?.burnTime && <p className={errorClasses}>{errors.rocketSpecs.burnTime.message}</p>}
+                {errors.rocketSpecs?.stage1BurnTime && <p className={errorClasses}>{errors.rocketSpecs.stage1BurnTime.message}</p>}
               </div>
               <div>
                 <label className={labelClasses}>
-                  <Weight className="w-4 h-4" />
-                  Stage Sep. Mass (kg)
+                  <Zap className="w-4 h-4" />
+                  Stage 1 Thrust (N)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="number"
                   className={inputClasses}
-                  placeholder="131000"
-                  {...register('rocketSpecs.stageSeparationMass')}
+                  placeholder="7607000"
+                  {...register('rocketSpecs.stage1Thrust')}
                 />
-                {errors.rocketSpecs?.stageSeparationMass && <p className={errorClasses}>{errors.rocketSpecs.stageSeparationMass.message}</p>}
+                {errors.rocketSpecs?.stage1Thrust && <p className={errorClasses}>{errors.rocketSpecs.stage1Thrust.message}</p>}
               </div>
               <div>
                 <label className={labelClasses}>
                   <Gauge className="w-4 h-4" />
-                  ISP (s)
+                  ISP of Stage 1 (s)
                   <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="number"
                   className={inputClasses}
                   placeholder="282"
-                  {...register('rocketSpecs.isp')}
+                  {...register('rocketSpecs.stage1ISP')}
                 />
-                {errors.rocketSpecs?.isp && <p className={errorClasses}>{errors.rocketSpecs.isp.message}</p>}
+                {errors.rocketSpecs?.stage1ISP && <p className={errorClasses}>{errors.rocketSpecs.stage1ISP.message}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Stage 2 Details */}
+          <div className={sectionClasses}>
+            <div className="flex items-center gap-2 mb-6">
+              <Target className="w-5 h-5 text-blue-500" />
+              <h3 className="text-xl font-semibold text-white">Stage 2 Details</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label className={labelClasses}>
+                  <Clock className="w-4 h-4" />
+                  Stage 2 Burn Time (s)
+                  <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  className={inputClasses}
+                  placeholder="397"
+                  {...register('rocketSpecs.stage2BurnTime')}
+                />
+                {errors.rocketSpecs?.stage2BurnTime && <p className={errorClasses}>{errors.rocketSpecs.stage2BurnTime.message}</p>}
+              </div>
+              <div>
+                <label className={labelClasses}>
+                  <Zap className="w-4 h-4" />
+                  Stage 2 Thrust (N)
+                  <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  className={inputClasses}
+                  placeholder="934000"
+                  {...register('rocketSpecs.stage2Thrust')}
+                />
+                {errors.rocketSpecs?.stage2Thrust && <p className={errorClasses}>{errors.rocketSpecs.stage2Thrust.message}</p>}
+              </div>
+              <div>
+                <label className={labelClasses}>
+                  <Gauge className="w-4 h-4" />
+                  ISP of Stage 2 (s)
+                  <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="number"
+                  className={inputClasses}
+                  placeholder="421"
+                  {...register('rocketSpecs.stage2ISP')}
+                />
+                {errors.rocketSpecs?.stage2ISP && <p className={errorClasses}>{errors.rocketSpecs.stage2ISP.message}</p>}
               </div>
             </div>
           </div>
@@ -241,12 +307,12 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             {isLoading ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Running Simulation...
+                Running Two-Stage Simulation...
               </>
             ) : (
               <>
                 <Rocket className="w-5 h-5" />
-                Launch Simulation
+                Launch Two-Stage Simulation
               </>
             )}
           </button>
