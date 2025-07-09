@@ -68,7 +68,8 @@ export const LaunchMap: React.FC<LaunchMapProps> = ({ latitude, longitude, onCoo
   }, [popupLabel, latitude, longitude]);
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+    <div className="bg-transparent border border-gray-700 rounded-xl p-6">
+
       <div className="flex items-center gap-2 mb-6">
         <Globe className="w-5 h-5 text-red-500" />
         <h3 className="text-xl font-semibold text-white">Launch Site Selection</h3>
@@ -105,10 +106,10 @@ export const LaunchMap: React.FC<LaunchMapProps> = ({ latitude, longitude, onCoo
               key={location.name}
               onClick={() => handlePresetClick({ ...location, name: location.name })}
               className={`p-3 rounded-lg border text-left transition-all duration-200
-                hover:border-red-500 hover:bg-gray-800
+                hover:border-red-500 hover:bg-transparent-800
                 ${selectedLocation?.lat === location.lat && selectedLocation?.lng === location.lng
-                  ? 'border-red-500 bg-gray-800'
-                  : 'border-gray-600 bg-gray-800/50'
+                  ? 'border-red-500 bg-transparent-800'
+                  : 'border-gray-600 bg-transparent-800/50'
                 }`}
             >
               <div className="flex items-start gap-3">
@@ -127,7 +128,7 @@ export const LaunchMap: React.FC<LaunchMapProps> = ({ latitude, longitude, onCoo
       </div>
 
       {/* 📌 Current Location */}
-      <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+      <div className="mt-6 p-4 bg-transparent-800 rounded-lg border border-gray-700">
         <h4 className="text-sm font-medium text-gray-300 mb-2">Current Launch Site</h4>
         <div className="flex items-center gap-2 text-white">
           <MapPin className="w-4 h-4 text-red-500" />

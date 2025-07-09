@@ -1,22 +1,53 @@
 import React, { useState } from 'react';
 import { VideoIntro } from './components/VideoIntro';
+import { VideoBackground } from './components/VideoBackground';
 import { RocketForm } from './components/RocketForm';
 import { SimulationResults } from './components/SimulationResults';
 import { LaunchMap } from './components/LaunchMap';
-import { LoadingSpinner } from './components/LoadingSpinner';
-import { ErrorMessage } from './components/ErrorMessage';
 import { useSimulation } from './hooks/useSimulation';
 import { LaunchParameters } from './types/rocket';
-import { Rocket, Activity, Map, BarChart3 } from 'lucide-react';
+import { Rocket, Activity, Map, BarChart3, Maximize2, Minimize2 } from 'lucide-react';
 
 function App() {
   const [showVideo, setShowVideo] = useState(true);
   const [activeTab, setActiveTab] = useState<'form' | 'map' | 'results'>('form');
   const [formData, setFormData] = useState<LaunchParameters | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(true); // Start as fullscreen
   const { simulation, isRunning, runSimulation } = useSimulation();
 
   const handleVideoClick = () => {
     setShowVideo(false);
+  };
+
+  const requestFullscreen = () => {
+    const elem = document.documentElement;
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen();
+    } else if ((elem as any).webkitRequestFullscreen) {
+      (elem as any).webkitRequestFullscreen();
+    } else if ((elem as any).msRequestFullscreen) {
+      (elem as any).msRequestFullscreen();
+    }
+    setIsFullscreen(true);
+  };
+
+  const exitFullscreen = () => {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if ((document as any).webkitExitFullscreen) {
+      (document as any).webkitExitFullscreen();
+    } else if ((document as any).msExitFullscreen) {
+      (document as any).msExitFullscreen();
+    }
+    setIsFullscreen(false);
+  };
+
+  const toggleFullscreen = () => {
+    if (isFullscreen) {
+      exitFullscreen();
+    } else {
+      requestFullscreen();
+    }
   };
 
   const handleFormSubmit = async (data: LaunchParameters) => {
@@ -35,6 +66,7 @@ function App() {
     }
   };
 
+  // Show intro video first
   if (showVideo) {
     return <VideoIntro onVideoClick={handleVideoClick} />;
   }
@@ -46,38 +78,54 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-900">
+    <div className="h-screen w-screen relative overflow-hidden">
+      {/* Video Background */}
+      <VideoBackground opacity={0.4} />
+      
       {/* Header */}
-      <header className="bg-black border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <header className="relative z-10 bg-black/90 backdrop-blur-md border-b border-gray-800/50">
+        <div className="w-full px-6">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-600 rounded-lg">
-                <Rocket className="w-6 h-6 text-white" />
+                <Rocket className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white">Rocket Simulation Suite</h1>
-                <p className="text-sm text-gray-400">Advanced trajectory modeling and optimization</p>
+                <h1 className="text-lg font-bold text-white">Rocket Simulation Suite</h1>
+                <p className="text-xs text-gray-400">Advanced trajectory modeling and optimization</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-green-500" />
-              <span className="text-sm text-gray-400">System Online</span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-green-500" />
+                <span className="text-xs text-gray-400">System Online</span>
+              </div>
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4 text-gray-400" />
+                ) : (
+                  <Maximize2 className="w-4 h-4 text-gray-400" />
+                )}
+              </button>
             </div>
           </div>
         </div>
       </header>
 
       {/* Navigation Tabs */}
-      <nav className="bg-gray-900 border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="relative z-10 bg-gray-900/90 backdrop-blur-md border-b border-gray-800/50">
+        <div className="w-full px-6">
           <div className="flex space-x-8">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`
-                  flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm
+                  flex items-center gap-2 py-3 px-1 border-b-2 font-medium text-sm
                   transition-colors duration-200
                   ${activeTab === tab.id
                     ? 'border-red-500 text-red-500'
@@ -94,7 +142,7 @@ function App() {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="relative z-10 w-full h-[calc(100vh-7rem)] overflow-y-auto px-6 py-6">
         {activeTab === 'form' && (
           <RocketForm onSubmit={handleFormSubmit} isLoading={isRunning} />
         )}
@@ -109,10 +157,6 @@ function App() {
 
         {activeTab === 'results' && (
           <div className="space-y-8">
-            {isRunning && (
-              <LoadingSpinner message="Running trajectory simulation..." />
-            )}
-            
             {simulation && !isRunning && (
               <SimulationResults result={simulation} />
             )}
@@ -127,11 +171,11 @@ function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-black border-t border-gray-800 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-gray-400 text-sm">
-            <p>© 2025 Rocket Simulation Suite - Advanced Aerospace Modeling Platform</p>
+      {/* Compact Footer */}
+      <footer className="absolute bottom-0 left-0 right-0 z-10 bg-black/90 backdrop-blur-md border-t border-gray-800/50">
+        <div className="w-full px-6 py-2">
+          <div className="text-center text-gray-500 text-xs">
+            © 2025 Rocket Simulation Suite
           </div>
         </div>
       </footer>

@@ -49,7 +49,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   });
 
   const inputClasses = `
-    w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg
+    w-full px-4 py-3  bg-transparent  border border-gray-600 rounded-lg
     text-white placeholder-gray-400
     focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent
     transition-all duration-200
@@ -66,13 +66,14 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   `;
 
   const sectionClasses = `
-    bg-gray-900 p-6 rounded-xl border border-gray-700
+    bg-trasnparent-900 p-6 rounded-xl border border-gray-700
     hover:border-gray-600 transition-colors duration-200
   `;
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="bg-black border border-gray-800 rounded-2xl p-8 shadow-2xl">
+      <div className="bg-transparent border border-gray-700 rounded-xl p-6">
+
         <div className="flex items-center gap-3 mb-8">
           <div className="p-3 bg-red-600 rounded-lg">
             <Rocket className="w-8 h-8 text-white" />

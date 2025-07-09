@@ -20,7 +20,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
   const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string | number; unit?: string; color?: string }> = ({ 
     icon, title, value, unit, color = 'bg-red-600' 
   }) => (
-    <div className="bg-gray-800 p-4 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+    <div className="bg-transparent-800 p-4 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
       <div className="flex items-center gap-3 mb-2">
         <div className={`p-2 ${color} rounded-lg`}>
           {icon}
@@ -35,7 +35,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
   );
 
   const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
+    <div className="bg-transparent backdrop-blur-sm p-6 rounded-xl border border-gray-700">
       <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
       <div className="h-80">
         {children}
@@ -46,7 +46,8 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
   return (
     <div className="space-y-8">
       {/* Optimal Parameters */}
-      <div className="bg-black border border-gray-800 rounded-2xl p-8">
+      <div className="bg-transparent border border-gray-700 rounded-xl p-6">
+
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-red-600 rounded-lg">
             <Target className="w-8 h-8 text-white" />
@@ -115,6 +116,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
 
       {/* Performance Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
         <ChartContainer title="Altitude vs Time (Two-Stage)">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.altitude}>
