@@ -38,7 +38,6 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   const stage1Engines = getEnginesByStage(1);
   const stage2Engines = getEnginesByStage(2);
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LaunchParameters>({
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<LaunchParameters>({
     resolver: yupResolver(schema),
     defaultValues: {
