@@ -1,8 +1,12 @@
 import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { LaunchParameters } from '../types/rocket';
+import { Engine } from '../types/engine';
+import { getEnginesByStage, getEngineById } from '../data/engines';
+import { EngineSelector } from './EngineSelector';
 import { Rocket, MapPin, Settings, Zap, Weight, Clock, Gauge, Flame, Target } from 'lucide-react';
 
 const schema = yup.object().shape({
@@ -28,7 +32,14 @@ interface RocketFormProps {
 }
 
 export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = false }) => {
+  const [selectedStage1Engine, setSelectedStage1Engine] = useState<Engine | null>(null);
+  const [selectedStage2Engine, setSelectedStage2Engine] = useState<Engine | null>(null);
+  
+  const stage1Engines = getEnginesByStage(1);
+  const stage2Engines = getEnginesByStage(2);
+
   const { register, handleSubmit, formState: { errors } } = useForm<LaunchParameters>({
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<LaunchParameters>({
     resolver: yupResolver(schema),
     defaultValues: {
       latitude: 28.5721,
@@ -47,6 +58,38 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
       }
     }
   });
+
+  // Watch form values to detect changes
+  const watchedValues = watch();
+
+  // Effect to update form when stage 1 engine is selected
+  useEffect(() => {
+    if (selectedStage1Engine) {
+      setValue('rocketSpecs.stage1BurnTime', selectedStage1Engine.burnTime);
+      setValue('rocketSpecs.stage1Thrust', selectedStage1Engine.thrust);
+      setValue('rocketSpecs.stage1ISP', selectedStage1Engine.isp);
+      
+      // Update total mass and stage separation mass based on engine fuel mass
+      const currentStageSeparationMass = watchedValues.rocketSpecs?.stageSeparationMass || 131000;
+      const newTotalMass = selectedStage1Engine.fuelMass + currentStageSeparationMass;
+      setValue('rocketSpecs.mass', newTotalMass);
+    }
+  }, [selectedStage1Engine, setValue, watchedValues.rocketSpecs?.stageSeparationMass]);
+
+  // Effect to update form when stage 2 engine is selected
+  useEffect(() => {
+    if (selectedStage2Engine) {
+      setValue('rocketSpecs.stage2BurnTime', selectedStage2Engine.burnTime);
+      setValue('rocketSpecs.stage2Thrust', selectedStage2Engine.thrust);
+      setValue('rocketSpecs.stage2ISP', selectedStage2Engine.isp);
+      
+      // Update stage separation mass based on engine fuel mass
+      const stage1FuelMass = selectedStage1Engine?.fuelMass || 418054;
+      const newStageSeparationMass = selectedStage2Engine.fuelMass + 24000; // Add some structural mass
+      setValue('rocketSpecs.stageSeparationMass', newStageSeparationMass);
+      setValue('rocketSpecs.mass', stage1FuelMass + newStageSeparationMass);
+    }
+  }, [selectedStage2Engine, setValue, selectedStage1Engine]);
 
   const inputClasses = `
     w-full px-4 py-3  bg-transparent  border border-gray-600 rounded-lg
@@ -199,11 +242,22 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
           <div className={sectionClasses}>
             <div className="flex items-center gap-2 mb-6">
               <Flame className="w-5 h-5 text-orange-500" />
-              <h3 className="text-xl font-semibold text-white">Stage 1 Details</h3>
+              <h3 className="text-xl font-semibold text-white">
+                {selectedStage1Engine ? `${selectedStage1Engine.name} Details` : 'Stage 1 Details'}
+              </h3>
               <div className="ml-auto text-sm text-orange-400">
-                Burn Duration: 162s
+                Burn Duration: {watchedValues.rocketSpecs?.stage1BurnTime || 162}s
               </div>
             </div>
+            
+            <EngineSelector
+              engines={stage1Engines}
+              selectedEngine={selectedStage1Engine}
+              onEngineSelect={setSelectedStage1Engine}
+              stage={1}
+              label="Select Stage 1 Engine"
+            />
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className={labelClasses}>
@@ -257,11 +311,22 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
           <div className={sectionClasses}>
             <div className="flex items-center gap-2 mb-6">
               <Target className="w-5 h-5 text-blue-500" />
-              <h3 className="text-xl font-semibold text-white">Stage 2 Details</h3>
+              <h3 className="text-xl font-semibold text-white">
+                {selectedStage2Engine ? `${selectedStage2Engine.name} Details` : 'Stage 2 Details'}
+              </h3>
               <div className="ml-auto text-sm text-blue-400">
-                Burn Duration: 397s
+                Burn Duration: {watchedValues.rocketSpecs?.stage2BurnTime || 397}s
               </div>
             </div>
+            
+            <EngineSelector
+              engines={stage2Engines}
+              selectedEngine={selectedStage2Engine}
+              onEngineSelect={setSelectedStage2Engine}
+              stage={2}
+              label="Select Stage 2 Engine"
+            />
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className={labelClasses}>
@@ -307,34 +372,6 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                 />
                 {errors.rocketSpecs?.stage2ISP && <p className={errorClasses}>{errors.rocketSpecs.stage2ISP.message}</p>}
                 <p className="text-xs text-gray-500 mt-1">Higher efficiency than stage 1</p>
-              </div>
-            </div>
-            
-            {/* Physics Information Panel */}
-            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-300 mb-3 flex items-center gap-2">
-                <Target className="w-4 h-4" />
-                Simulation Physics Notes
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-300">
-                <div>
-                  <p className="font-medium text-blue-400 mb-1">✓ Included Forces:</p>
-                  <ul className="space-y-1 text-gray-400">
-                    <li>• Gravity (altitude-dependent)</li>
-                    <li>• Atmospheric drag (decreases with altitude)</li>
-                    <li>• Thrust (stage-specific)</li>
-                    <li>• Mass reduction via ISP</li>
-                  </ul>
-                </div>
-                <div>
-                  <p className="font-medium text-blue-400 mb-1">⚡ Integration Method:</p>
-                  <ul className="space-y-1 text-gray-400">
-                    <li>• Runge-Kutta 4th order (RK4)</li>
-                    <li>• Time step: 0.1 seconds</li>
-                    <li>• Total simulation: 559 seconds</li>
-                    <li>• Negative acceleration is normal after burnout</li>
-                  </ul>
-                </div>
               </div>
             </div>
           </div>
