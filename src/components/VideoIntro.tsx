@@ -40,13 +40,11 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ onVideoClick }) => {
       <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
         <div className="text-center">
          <h1 className="text-5xl md:text-7xl font-bold bg-gradient-to-r from-yellow-400 to-red-600 text-transparent bg-clip-text drop-shadow-2xl mb-4">
-  Rocket Configuration System
-</h1>
-<p className="text-lg text-gray-300">
-  Configure your rocket and visualize its flight dynamics
-</p>
-
-          
+            Rocket Configuration System
+          </h1>
+          <p className="text-lg text-gray-300">
+            Configure your rocket and visualize its flight dynamics
+          </p>
         </div>
       </div>
     </div>
