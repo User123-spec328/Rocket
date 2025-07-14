@@ -57,6 +57,7 @@ export const SimulationResults: React.FC = () => {
       let altitude = 0;
       let velocity = 0;
       let acceleration = 0;
+      const totalBurnTime = stage1BurnTime + stage2BurnTime; // 162 + 397 = 559 seconds
       const plots = {
         altitude: [] as { time: number; value: number }[],
         velocity: [] as { time: number; value: number }[],
@@ -67,7 +68,8 @@ export const SimulationResults: React.FC = () => {
         stage2Trajectory: [] as { time: number; value: number }[]
       };
 
-      while (altitude < targetAltitude * 1.1 && time <= stage1BurnTime + stage2BurnTime) {
+      // Run simulation for full burn time regardless of altitude reached
+      while (time <= totalBurnTime) {
         // Atmospheric density model (simplified, decreases with altitude)
         const altitudeKm = altitude / 1000;
         let density = 1.225 * Math.exp(-altitudeKm / 8.4); // kg/m^3, approximate
@@ -78,9 +80,13 @@ export const SimulationResults: React.FC = () => {
         if (time <= stage1BurnTime && mass > stageSeparationMass) {
           thrust = stage1Thrust;
           massFlowRate = thrust / (stage1ISP * g0);
-        } else if (time > stage1BurnTime && time <= stage1BurnTime + stage2BurnTime && mass > 0) {
+        } else if (time > stage1BurnTime && time <= totalBurnTime && mass > 0) {
           thrust = stage2Thrust;
           massFlowRate = thrust / (stage2ISP * g0);
+        } else {
+          // Coast phase - no thrust, no mass loss
+          thrust = 0;
+          massFlowRate = 0;
         }
 
         // Drag force
@@ -92,7 +98,9 @@ export const SimulationResults: React.FC = () => {
 
         // Acceleration function
         const computeAcceleration = (v: number, m: number) => {
-          return (thrust - 0.5 * density * v * v * dragCoefficient * frontalArea - m * gravity) / m;
+          const dragForce = 0.5 * density * v * v * dragCoefficient * frontalArea;
+          const gravityForce = m * gravity;
+          return (thrust - dragForce - gravityForce) / m;
         };
 
         // RK4 for velocity and altitude
@@ -111,7 +119,11 @@ export const SimulationResults: React.FC = () => {
         // Update velocity and altitude using RK4
         velocity += (dt / 6) * (k1v + 2 * k2v + 2 * k3v + k4v);
         altitude += (dt / 6) * (k1h + 2 * k2h + 2 * k3h + k4h);
-        mass = Math.max(0, mass - massFlowRate * dt); // Prevent negative mass
+        
+        // Update mass only during burn phases
+        if (massFlowRate > 0) {
+          mass = Math.max(stageSeparationMass * 0.1, mass - massFlowRate * dt); // Prevent mass from going too low
+        }
 
         // Compute acceleration for plotting (using final velocity and mass)
         acceleration = computeAcceleration(velocity, mass);
@@ -129,19 +141,19 @@ export const SimulationResults: React.FC = () => {
         }
 
         time += dt;
-
-        // Stop if mass becomes zero or altitude exceeds target significantly
-        if (mass <= 0) break;
       }
 
       // Compute optimal parameters
+      const stageSeparationIndex = Math.floor(stage1BurnTime / dt);
+      const stageSeparationAltitude = plots.altitude[stageSeparationIndex]?.value || 0;
+      
       const optimalParams = {
         requiredVelocity: Math.sqrt(mu / (Re + targetAltitude)),
         launchAngle: 3.59,
         maxAltitude: Math.max(...plots.altitude.map(p => p.value)),
-        totalFlightTime: plots.altitude.length * dt,
+        totalFlightTime: totalBurnTime, // Use actual total burn time
         stageSeparationTime: stage1BurnTime,
-        stageSeparationAltitude: plots.altitude[Math.floor(stage1BurnTime / dt)].value,
+        stageSeparationAltitude: stageSeparationAltitude,
         stage1OptimalBurnTime: stage1BurnTime,
         stage2OptimalBurnTime: stage2BurnTime
       };

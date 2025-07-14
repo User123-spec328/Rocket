@@ -141,6 +141,9 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             <div className="flex items-center gap-2 mb-6">
               <Settings className="w-5 h-5 text-red-500" />
               <h3 className="text-xl font-semibold text-white">Rocket Specifications</h3>
+              <div className="ml-auto text-sm text-gray-400">
+                Total Burn Time: {((162 + 397)).toLocaleString()}s
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -156,6 +159,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.mass')}
                 />
                 {errors.rocketSpecs?.mass && <p className={errorClasses}>{errors.rocketSpecs.mass.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Falcon Heavy: ~549,054 kg</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -170,6 +174,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stageSeparationMass')}
                 />
                 {errors.rocketSpecs?.stageSeparationMass && <p className={errorClasses}>{errors.rocketSpecs.stageSeparationMass.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Mass after stage 1 separation</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -185,6 +190,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.dragCoefficient')}
                 />
                 {errors.rocketSpecs?.dragCoefficient && <p className={errorClasses}>{errors.rocketSpecs.dragCoefficient.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Typical range: 0.2-0.4</p>
               </div>
             </div>
           </div>
@@ -194,6 +200,9 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             <div className="flex items-center gap-2 mb-6">
               <Flame className="w-5 h-5 text-orange-500" />
               <h3 className="text-xl font-semibold text-white">Stage 1 Details</h3>
+              <div className="ml-auto text-sm text-orange-400">
+                Burn Duration: 162s
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -209,6 +218,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage1BurnTime')}
                 />
                 {errors.rocketSpecs?.stage1BurnTime && <p className={errorClasses}>{errors.rocketSpecs.stage1BurnTime.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Falcon Heavy: ~162s</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -223,6 +233,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage1Thrust')}
                 />
                 {errors.rocketSpecs?.stage1Thrust && <p className={errorClasses}>{errors.rocketSpecs.stage1Thrust.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">~7.6 MN total thrust</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -237,6 +248,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage1ISP')}
                 />
                 {errors.rocketSpecs?.stage1ISP && <p className={errorClasses}>{errors.rocketSpecs.stage1ISP.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Specific impulse efficiency</p>
               </div>
             </div>
           </div>
@@ -246,6 +258,9 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             <div className="flex items-center gap-2 mb-6">
               <Target className="w-5 h-5 text-blue-500" />
               <h3 className="text-xl font-semibold text-white">Stage 2 Details</h3>
+              <div className="ml-auto text-sm text-blue-400">
+                Burn Duration: 397s
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -261,6 +276,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage2BurnTime')}
                 />
                 {errors.rocketSpecs?.stage2BurnTime && <p className={errorClasses}>{errors.rocketSpecs.stage2BurnTime.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Upper stage burn duration</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -275,6 +291,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage2Thrust')}
                 />
                 {errors.rocketSpecs?.stage2Thrust && <p className={errorClasses}>{errors.rocketSpecs.stage2Thrust.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">~934 kN upper stage thrust</p>
               </div>
               <div>
                 <label className={labelClasses}>
@@ -289,6 +306,35 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
                   {...register('rocketSpecs.stage2ISP')}
                 />
                 {errors.rocketSpecs?.stage2ISP && <p className={errorClasses}>{errors.rocketSpecs.stage2ISP.message}</p>}
+                <p className="text-xs text-gray-500 mt-1">Higher efficiency than stage 1</p>
+              </div>
+            </div>
+            
+            {/* Physics Information Panel */}
+            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+              <h4 className="text-sm font-medium text-blue-300 mb-3 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Simulation Physics Notes
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-300">
+                <div>
+                  <p className="font-medium text-blue-400 mb-1">✓ Included Forces:</p>
+                  <ul className="space-y-1 text-gray-400">
+                    <li>• Gravity (altitude-dependent)</li>
+                    <li>• Atmospheric drag (decreases with altitude)</li>
+                    <li>• Thrust (stage-specific)</li>
+                    <li>• Mass reduction via ISP</li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="font-medium text-blue-400 mb-1">⚡ Integration Method:</p>
+                  <ul className="space-y-1 text-gray-400">
+                    <li>• Runge-Kutta 4th order (RK4)</li>
+                    <li>• Time step: 0.1 seconds</li>
+                    <li>• Total simulation: 559 seconds</li>
+                    <li>• Negative acceleration is normal after burnout</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
