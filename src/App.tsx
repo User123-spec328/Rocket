@@ -13,7 +13,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'form' | 'map' | 'results'>('form');
   const [formData, setFormData] = useState<LaunchParameters | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(true); // Start as fullscreen
-  const { simulation, isRunning, runSimulation } = useSimulation();
+  const { simulation, isRunning, error, runSimulation } = useSimulation();
 
   const handleVideoClick = () => {
     setShowVideo(false);
@@ -157,11 +157,17 @@ function App() {
 
         {activeTab === 'results' && (
           <div className="space-y-8">
+            {error && (
+              <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 text-center">
+                <p className="text-red-400">{error}</p>
+              </div>
+            )}
+            
             {simulation && !isRunning && (
               <SimulationResults result={simulation} />
             )}
 
-            {!simulation && !isRunning && (
+            {!simulation && !isRunning && !error && (
               <div className="text-center py-16">
                 <Rocket className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <p className="text-gray-400">No simulation results yet. Configure your rocket and launch!</p>

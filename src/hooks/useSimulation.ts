@@ -10,6 +10,7 @@ const DRAG_AREA = 10; // m² (approximate cross-sectional area)
 export const useSimulation = () => {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const calculateDragForce = useCallback((velocity: number, altitude: number, dragCoeff: number): number => {
     // Air density decreases with altitude
@@ -31,7 +32,7 @@ export const useSimulation = () => {
   } => {
     const { rocketSpecs, orbitHeight } = params;
     const targetAltitude = orbitHeight * 1000; // Convert km to meters
-    const dt = 0.1; // Time step in seconds
+    const dt = 1.0; // Increased time step for better visualization
     
     const trajectoryData: TrajectoryPoint[] = [];
     const stage1TrajectoryData: TrajectoryPoint[] = [];
@@ -41,6 +42,11 @@ export const useSimulation = () => {
     let altitude = 0;
     let velocity = 0;
     let mass = rocketSpecs.mass;
+    
+    // Ensure we have valid parameters
+    if (!rocketSpecs.stage1Thrust || !rocketSpecs.stage2Thrust) {
+      throw new Error('Invalid rocket specifications');
+    }
     
     // Stage 1 simulation
     while (time <= rocketSpecs.stage1BurnTime && altitude >= 0) {
@@ -62,15 +68,18 @@ export const useSimulation = () => {
       velocity += acceleration * dt;
       altitude += velocity * dt;
       
+      // Ensure altitude doesn't go negative
+      altitude = Math.max(0, altitude);
+      
       const point: TrajectoryPoint = {
         time,
-        altitude: Math.max(0, altitude),
+        altitude,
         velocity,
         acceleration,
         thrust: thrustForce,
         mass,
-        x: altitude * Math.cos(time * 0.01), // Simple trajectory approximation
-        y: altitude * Math.sin(time * 0.01),
+        x: time * velocity * 0.1, // Better trajectory approximation
+        y: altitude,
         z: altitude,
         stage: 1
       };
@@ -107,13 +116,13 @@ export const useSimulation = () => {
       
       const point: TrajectoryPoint = {
         time,
-        altitude: Math.max(0, altitude),
+        altitude,
         velocity,
         acceleration,
         thrust: thrustForce,
         mass,
-        x: altitude * Math.cos(time * 0.01),
-        y: altitude * Math.sin(time * 0.01),
+        x: time * velocity * 0.1,
+        y: altitude,
         z: altitude,
         stage: 2
       };
@@ -138,13 +147,13 @@ export const useSimulation = () => {
       
       const point: TrajectoryPoint = {
         time,
-        altitude: Math.max(0, altitude),
+        altitude,
         velocity,
         acceleration,
         thrust: 0,
         mass,
-        x: altitude * Math.cos(time * 0.01),
-        y: altitude * Math.sin(time * 0.01),
+        x: time * velocity * 0.1,
+        y: altitude,
         z: altitude,
         stage: 2
       };
@@ -234,32 +243,40 @@ export const useSimulation = () => {
   const runSimulation = useCallback(async (params: LaunchParameters) => {
     setIsRunning(true);
     setSimulation(null);
+    setError(null);
 
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const { trajectoryData, stage1TrajectoryData, stage2TrajectoryData } = generateTrajectoryData(params);
-    const plots = generatePlotData(trajectoryData, stage1TrajectoryData, stage2TrajectoryData);
-    const optimalParams = calculateOptimalParameters(params, trajectoryData);
+      const { trajectoryData, stage1TrajectoryData, stage2TrajectoryData } = generateTrajectoryData(params);
+      const plots = generatePlotData(trajectoryData, stage1TrajectoryData, stage2TrajectoryData);
+      const optimalParams = calculateOptimalParameters(params, trajectoryData);
 
-    const result: SimulationResult = {
-      id: Date.now().toString(),
-      status: 'completed',
-      trajectoryData,
-      stage1TrajectoryData,
-      stage2TrajectoryData,
-      plots,
-      optimalParams,
-      timestamp: new Date()
-    };
+      const result: SimulationResult = {
+        id: Date.now().toString(),
+        status: 'completed',
+        trajectoryData,
+        stage1TrajectoryData,
+        stage2TrajectoryData,
+        plots,
+        optimalParams,
+        timestamp: new Date()
+      };
 
-    setSimulation(result);
-    setIsRunning(false);
+      setSimulation(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Simulation failed');
+      setSimulation(null);
+    } finally {
+      setIsRunning(false);
+    }
   }, [generateTrajectoryData, generatePlotData, calculateOptimalParameters]);
 
   return {
     simulation,
     isRunning,
+    error,
     runSimulation
   };
 };

@@ -316,7 +316,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
 
         <ChartContainer title="Stage Trajectories Comparison">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart>
+            <LineChart data={plots.altitude}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
               <XAxis 
                 dataKey="time" 
@@ -339,7 +339,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
               />
               <Legend />
               <Line
-                data={plots.stage1Trajectory}
+                data={plots.altitude.filter(point => point.stage === 1)}
                 type="monotone"
                 dataKey="value"
                 stroke="#f97316"
@@ -348,7 +348,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
                 name="Stage 1 Trajectory"
               />
               <Line
-                data={plots.stage2Trajectory}
+                data={plots.altitude.filter(point => point.stage === 2)}
                 type="monotone"
                 dataKey="value"
                 stroke="#3b82f6"

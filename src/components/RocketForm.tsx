@@ -64,7 +64,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   useEffect(() => {
     if (selectedStage1Engine) {
       setValue('rocketSpecs.stage1BurnTime', selectedStage1Engine.burnTime);
-      setValue('rocketSpecs.stage1Thrust', selectedStage1Engine.thrust);
+      setValue('rocketSpecs.stage1Thrust', Math.round(selectedStage1Engine.thrust));
       setValue('rocketSpecs.stage1ISP', selectedStage1Engine.isp);
       
       // Update total mass and stage separation mass based on engine fuel mass
@@ -78,7 +78,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
   useEffect(() => {
     if (selectedStage2Engine) {
       setValue('rocketSpecs.stage2BurnTime', selectedStage2Engine.burnTime);
-      setValue('rocketSpecs.stage2Thrust', selectedStage2Engine.thrust);
+      setValue('rocketSpecs.stage2Thrust', Math.round(selectedStage2Engine.thrust));
       setValue('rocketSpecs.stage2ISP', selectedStage2Engine.isp);
       
       // Update stage separation mass based on engine fuel mass
