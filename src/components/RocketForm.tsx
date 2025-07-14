@@ -241,7 +241,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             <div className="flex items-center gap-2 mb-6">
               <Flame className="w-5 h-5 text-orange-500" />
               <h3 className="text-xl font-semibold text-white">
-                {selectedStage1Engine ? `${selectedStage1Engine.name} Details` : 'Stage 1 Details'}
+                Stage 1 Details
               </h3>
               <div className="ml-auto text-sm text-orange-400">
                 Burn Duration: {watchedValues.rocketSpecs?.stage1BurnTime || 162}s
@@ -310,7 +310,7 @@ export const RocketForm: React.FC<RocketFormProps> = ({ onSubmit, isLoading = fa
             <div className="flex items-center gap-2 mb-6">
               <Target className="w-5 h-5 text-blue-500" />
               <h3 className="text-xl font-semibold text-white">
-                {selectedStage2Engine ? `${selectedStage2Engine.name} Details` : 'Stage 2 Details'}
+                Stage 2 Details
               </h3>
               <div className="ml-auto text-sm text-blue-400">
                 Burn Duration: {watchedValues.rocketSpecs?.stage2BurnTime || 397}s

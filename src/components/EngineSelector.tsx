@@ -96,7 +96,7 @@ export const EngineSelector: React.FC<EngineSelectorProps> = ({
             </div>
             <div>
               <span className="text-gray-400">Thrust:</span>
-              <span className="text-white ml-2">{(selectedEngine.thrust / 1000).toFixed(0)} kN</span>
+              <span className="text-white ml-2">{Math.round(selectedEngine.thrust / 1000).toLocaleString()} kN</span>
             </div>
           </div>
         </div>
