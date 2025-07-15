@@ -47,23 +47,21 @@ const getDragForce = (velocity: number, altitude: number, dragCoeff: number): nu
   return 0.5 * density * velocity * velocity * dragCoeff * REFERENCE_AREA;
 };
 
-// Gravity turn profile (realistic launch trajectory)
-const getGravityTurnAngle = (time: number, altitude: number): number => {
+// Improved gravity turn profile
+const getGravityTurnAngle = (time: number, altitude: number, velocity: number): number => {
   // Initial vertical ascent for first 10 seconds
   if (time < 10) return Math.PI / 2; // 90 degrees (vertical)
   
   // Gradual pitch-over starting at 10 seconds
-  const pitchOverStart = 10;
-  const pitchOverEnd = 150;
-  
-  if (time < pitchOverEnd) {
-    const progress = (time - pitchOverStart) / (pitchOverEnd - pitchOverStart);
-    // Smooth transition from 90° to 45° over pitch-over period
-    return (Math.PI / 2) * (1 - 0.5 * progress);
+  if (time < 50) {
+    const progress = (time - 10) / 40;
+    return (Math.PI / 2) * (1 - 0.3 * progress); // Pitch from 90° to 63°
   }
   
-  // Continue gradual turn based on altitude
-  if (altitude < 50000) {
+  // Continue gradual turn based on altitude and velocity
+  if (altitude < 30000) {
+    return Math.PI / 3; // 60 degrees
+  } else if (altitude < 60000) {
     return Math.PI / 4; // 45 degrees
   } else if (altitude < 100000) {
     return Math.PI / 6; // 30 degrees
@@ -72,7 +70,7 @@ const getGravityTurnAngle = (time: number, altitude: number): number => {
   }
 };
 
-// Calculate derivatives for RK4 integration
+// Calculate derivatives for RK4 integration - FIXED VERSION
 const calculateDerivatives = (
   state: StateVector,
   time: number,
@@ -83,39 +81,61 @@ const calculateDerivatives = (
 ): DerivativeVector => {
   const { altitude, velocity, mass, flightPathAngle } = state;
   
+  // Ensure valid state values
+  if (mass <= 0 || isNaN(mass)) {
+    console.error('Invalid mass in derivatives:', mass);
+    return { dAltitude: 0, dVelocity: 0, dMass: 0, dDownrange: 0, dFlightPathAngle: 0 };
+  }
+  
   // Gravity at current altitude
   const gravity = getGravityAtAltitude(altitude);
   
-  // Atmospheric drag
-  const dragForce = getDragForce(Math.abs(velocity), altitude, dragCoeff);
+  // Atmospheric drag (only if moving)
+  const dragForce = Math.abs(velocity) > 0.1 ? getDragForce(Math.abs(velocity), altitude, dragCoeff) : 0;
   const dragAcceleration = velocity > 0 ? -dragForce / mass : dragForce / mass;
   
   // Mass flow rate (from rocket equation)
-  const massFlowRate = isEngineOn ? thrust / (isp * STANDARD_GRAVITY) : 0;
+  const massFlowRate = isEngineOn && thrust > 0 ? thrust / (isp * STANDARD_GRAVITY) : 0;
   
   // Thrust acceleration
-  const thrustAcceleration = isEngineOn ? thrust / mass : 0;
+  const thrustAcceleration = isEngineOn && thrust > 0 ? thrust / mass : 0;
   
-  // Net acceleration components
-  const verticalAcceleration = thrustAcceleration * Math.sin(flightPathAngle) - gravity + dragAcceleration * Math.sin(flightPathAngle);
-  const horizontalAcceleration = thrustAcceleration * Math.cos(flightPathAngle) + dragAcceleration * Math.cos(flightPathAngle);
+  // Velocity components
+  const verticalVelocity = velocity * Math.sin(flightPathAngle);
+  const horizontalVelocity = velocity * Math.cos(flightPathAngle);
   
-  // Total acceleration
+  // Acceleration components
+  const thrustVertical = thrustAcceleration * Math.sin(flightPathAngle);
+  const thrustHorizontal = thrustAcceleration * Math.cos(flightPathAngle);
+  
+  const dragVertical = dragAcceleration * Math.sin(flightPathAngle);
+  const dragHorizontal = dragAcceleration * Math.cos(flightPathAngle);
+  
+  // Net accelerations
+  const verticalAcceleration = thrustVertical - gravity + dragVertical;
+  const horizontalAcceleration = thrustHorizontal + dragHorizontal;
+  
+  // Total acceleration magnitude
   const totalAcceleration = Math.sqrt(verticalAcceleration * verticalAcceleration + horizontalAcceleration * horizontalAcceleration);
   
-  // Flight path angle change (gravity turn effect)
-  const flightPathAngleRate = -gravity * Math.cos(flightPathAngle) / velocity;
+  // Flight path angle change rate (gravity turn effect)
+  let flightPathAngleRate = 0;
+  if (Math.abs(velocity) > 1.0) { // Only change angle if moving significantly
+    flightPathAngleRate = -gravity * Math.cos(flightPathAngle) / Math.abs(velocity);
+    // Limit the rate of change to prevent instability
+    flightPathAngleRate = Math.max(-0.1, Math.min(0.1, flightPathAngleRate));
+  }
   
   return {
-    dAltitude: velocity * Math.sin(flightPathAngle),
+    dAltitude: verticalVelocity,
     dVelocity: totalAcceleration,
     dMass: -massFlowRate,
-    dDownrange: velocity * Math.cos(flightPathAngle),
-    dFlightPathAngle: isNaN(flightPathAngleRate) ? 0 : flightPathAngleRate
+    dDownrange: horizontalVelocity,
+    dFlightPathAngle: flightPathAngleRate
   };
 };
 
-// 4th Order Runge-Kutta integration step
+// 4th Order Runge-Kutta integration step - IMPROVED VERSION
 const rk4Step = (
   state: StateVector,
   time: number,
@@ -125,6 +145,12 @@ const rk4Step = (
   dragCoeff: number,
   isEngineOn: boolean
 ): StateVector => {
+  // Validate inputs
+  if (state.mass <= 0 || isNaN(state.mass)) {
+    console.error('Invalid state in RK4:', state);
+    return state;
+  }
+  
   // Calculate k1
   const k1 = calculateDerivatives(state, time, thrust, isp, dragCoeff, isEngineOn);
   
@@ -132,7 +158,7 @@ const rk4Step = (
   const state2: StateVector = {
     altitude: state.altitude + 0.5 * dt * k1.dAltitude,
     velocity: state.velocity + 0.5 * dt * k1.dVelocity,
-    mass: state.mass + 0.5 * dt * k1.dMass,
+    mass: Math.max(state.mass + 0.5 * dt * k1.dMass, 1000), // Prevent negative mass
     downrange: state.downrange + 0.5 * dt * k1.dDownrange,
     flightPathAngle: state.flightPathAngle + 0.5 * dt * k1.dFlightPathAngle
   };
@@ -142,7 +168,7 @@ const rk4Step = (
   const state3: StateVector = {
     altitude: state.altitude + 0.5 * dt * k2.dAltitude,
     velocity: state.velocity + 0.5 * dt * k2.dVelocity,
-    mass: state.mass + 0.5 * dt * k2.dMass,
+    mass: Math.max(state.mass + 0.5 * dt * k2.dMass, 1000),
     downrange: state.downrange + 0.5 * dt * k2.dDownrange,
     flightPathAngle: state.flightPathAngle + 0.5 * dt * k2.dFlightPathAngle
   };
@@ -152,20 +178,28 @@ const rk4Step = (
   const state4: StateVector = {
     altitude: state.altitude + dt * k3.dAltitude,
     velocity: state.velocity + dt * k3.dVelocity,
-    mass: state.mass + dt * k3.dMass,
+    mass: Math.max(state.mass + dt * k3.dMass, 1000),
     downrange: state.downrange + dt * k3.dDownrange,
     flightPathAngle: state.flightPathAngle + dt * k3.dFlightPathAngle
   };
   const k4 = calculateDerivatives(state4, time + dt, thrust, isp, dragCoeff, isEngineOn);
   
-  // Combine using RK4 formula
-  return {
-    altitude: state.altitude + (dt / 6) * (k1.dAltitude + 2 * k2.dAltitude + 2 * k3.dAltitude + k4.dAltitude),
+  // Combine using RK4 formula with validation
+  const newState: StateVector = {
+    altitude: Math.max(0, state.altitude + (dt / 6) * (k1.dAltitude + 2 * k2.dAltitude + 2 * k3.dAltitude + k4.dAltitude)),
     velocity: state.velocity + (dt / 6) * (k1.dVelocity + 2 * k2.dVelocity + 2 * k3.dVelocity + k4.dVelocity),
-    mass: Math.max(state.mass + (dt / 6) * (k1.dMass + 2 * k2.dMass + 2 * k3.dMass + k4.dMass), 1000), // Minimum dry mass
+    mass: Math.max(1000, state.mass + (dt / 6) * (k1.dMass + 2 * k2.dMass + 2 * k3.dMass + k4.dMass)),
     downrange: state.downrange + (dt / 6) * (k1.dDownrange + 2 * k2.dDownrange + 2 * k3.dDownrange + k4.dDownrange),
-    flightPathAngle: state.flightPathAngle + (dt / 6) * (k1.dFlightPathAngle + 2 * k2.dFlightPathAngle + 2 * k3.dFlightPathAngle + k4.dFlightPathAngle)
+    flightPathAngle: Math.max(-Math.PI/2, Math.min(Math.PI/2, state.flightPathAngle + (dt / 6) * (k1.dFlightPathAngle + 2 * k2.dFlightPathAngle + 2 * k3.dFlightPathAngle + k4.dFlightPathAngle)))
   };
+  
+  // Validate output
+  if (isNaN(newState.velocity) || isNaN(newState.altitude) || isNaN(newState.mass)) {
+    console.error('NaN detected in RK4 output:', newState);
+    return state; // Return previous state if calculation failed
+  }
+  
+  return newState;
 };
 
 export const useSimulation = () => {
@@ -180,9 +214,10 @@ export const useSimulation = () => {
 
     try {
       console.log('Starting professional rocket simulation...');
+      console.log('Input parameters:', params);
       
       // Add realistic delay for UX
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const { rocketSpecs, orbitHeight } = params;
       const targetAltitude = orbitHeight * 1000; // Convert km to meters
@@ -193,12 +228,13 @@ export const useSimulation = () => {
       
       console.log(`Target altitude: ${targetAltitude/1000}km`);
       console.log(`Required orbital velocity: ${requiredOrbitalVelocity.toFixed(2)} m/s`);
+      console.log(`Rocket specs:`, rocketSpecs);
       
       // Simulation parameters
-      const dt = 0.1; // Time step (seconds) - small for accuracy
-      const maxSimulationTime = 2000; // Maximum simulation time (seconds)
+      const dt = 0.5; // Time step (seconds) - balanced for accuracy and performance
+      const maxSimulationTime = 1000; // Maximum simulation time (seconds)
       
-      // Initialize state vector
+      // Initialize state vector with validation
       let state: StateVector = {
         altitude: 0,
         velocity: 0,
@@ -207,15 +243,29 @@ export const useSimulation = () => {
         flightPathAngle: Math.PI / 2 // Start vertical
       };
       
-      let time = 0;
-      let stage = 1;
-      const trajectoryData: TrajectoryPoint[] = [];
+      // Validate initial state
+      if (state.mass <= 0 || isNaN(state.mass)) {
+        throw new Error(`Invalid initial mass: ${state.mass}`);
+      }
       
-      // Stage 1 simulation
+      let time = 0;
+      const trajectoryData: TrajectoryPoint[] = [];
+      let separationTime = 0;
+      let separationAltitude = 0;
+      
+      console.log('Initial state:', state);
+      console.log(`Stage 1 burn time: ${rocketSpecs.stage1BurnTime}s`);
+      console.log(`Stage 1 thrust: ${rocketSpecs.stage1Thrust}N`);
+      console.log(`Stage 1 ISP: ${rocketSpecs.stage1ISP}s`);
+      
+      // Stage 1 simulation - FIXED LOOP
       console.log('Stage 1 ignition...');
-      while (time <= rocketSpecs.stage1BurnTime && state.altitude >= 0 && time < maxSimulationTime) {
+      let stepCount = 0;
+      const maxSteps = Math.ceil(rocketSpecs.stage1BurnTime / dt) + 100; // Safety margin
+      
+      while (time < rocketSpecs.stage1BurnTime && state.altitude >= 0 && time < maxSimulationTime && stepCount < maxSteps) {
         // Update flight path angle for gravity turn
-        state.flightPathAngle = getGravityTurnAngle(time, state.altitude);
+        state.flightPathAngle = getGravityTurnAngle(time, state.altitude, state.velocity);
         
         // Calculate current acceleration for logging
         const gravity = getGravityAtAltitude(state.altitude);
@@ -224,9 +274,9 @@ export const useSimulation = () => {
         const dragAcceleration = dragForce / state.mass;
         const netAcceleration = thrustAcceleration - gravity - dragAcceleration;
         
-        // Store trajectory point
+        // Store trajectory point BEFORE integration step
         trajectoryData.push({
-          time,
+          time: parseFloat(time.toFixed(2)),
           altitude: Math.max(0, state.altitude),
           velocity: state.velocity,
           acceleration: netAcceleration,
@@ -239,7 +289,7 @@ export const useSimulation = () => {
         });
         
         // RK4 integration step
-        state = rk4Step(
+        const newState = rk4Step(
           state,
           time,
           dt,
@@ -249,24 +299,44 @@ export const useSimulation = () => {
           true
         );
         
+        // Validate new state
+        if (isNaN(newState.velocity) || isNaN(newState.altitude) || isNaN(newState.mass)) {
+          console.error('NaN detected at time:', time, 'state:', newState);
+          break;
+        }
+        
+        state = newState;
         time += dt;
+        stepCount++;
+        
+        // Debug logging every 10 seconds
+        if (stepCount % Math.ceil(10 / dt) === 0) {
+          console.log(`t=${time.toFixed(1)}s: alt=${(state.altitude/1000).toFixed(2)}km, vel=${state.velocity.toFixed(1)}m/s, mass=${(state.mass/1000).toFixed(1)}t`);
+        }
       }
       
       // Stage separation
-      const separationTime = time;
-      const separationAltitude = state.altitude;
+      separationTime = time;
+      separationAltitude = state.altitude;
       console.log(`Stage separation at t=${separationTime.toFixed(1)}s, altitude=${(separationAltitude/1000).toFixed(2)}km, velocity=${state.velocity.toFixed(2)}m/s`);
       
       // Update mass for stage 2
       state.mass = rocketSpecs.stageSeparationMass;
-      stage = 2;
       
-      // Stage 2 simulation
+      console.log(`Stage 2 burn time: ${rocketSpecs.stage2BurnTime}s`);
+      console.log(`Stage 2 thrust: ${rocketSpecs.stage2Thrust}N`);
+      console.log(`Stage 2 ISP: ${rocketSpecs.stage2ISP}s`);
+      console.log(`Stage 2 initial mass: ${state.mass}kg`);
+      
+      // Stage 2 simulation - FIXED LOOP
       console.log('Stage 2 ignition...');
-      const stage2EndTime = time + rocketSpecs.stage2BurnTime;
-      while (time <= stage2EndTime && state.altitude >= 0 && time < maxSimulationTime) {
+      const stage2EndTime = separationTime + rocketSpecs.stage2BurnTime;
+      stepCount = 0;
+      const maxSteps2 = Math.ceil(rocketSpecs.stage2BurnTime / dt) + 100;
+      
+      while (time < stage2EndTime && state.altitude >= 0 && time < maxSimulationTime && stepCount < maxSteps2) {
         // Continue gravity turn
-        state.flightPathAngle = getGravityTurnAngle(time, state.altitude);
+        state.flightPathAngle = getGravityTurnAngle(time, state.altitude, state.velocity);
         
         // Calculate current acceleration
         const gravity = getGravityAtAltitude(state.altitude);
@@ -276,7 +346,7 @@ export const useSimulation = () => {
         const netAcceleration = thrustAcceleration - gravity - dragAcceleration;
         
         trajectoryData.push({
-          time,
+          time: parseFloat(time.toFixed(2)),
           altitude: Math.max(0, state.altitude),
           velocity: state.velocity,
           acceleration: netAcceleration,
@@ -289,7 +359,7 @@ export const useSimulation = () => {
         });
         
         // RK4 integration step
-        state = rk4Step(
+        const newState = rk4Step(
           state,
           time,
           dt,
@@ -299,13 +369,29 @@ export const useSimulation = () => {
           true
         );
         
+        // Validate new state
+        if (isNaN(newState.velocity) || isNaN(newState.altitude) || isNaN(newState.mass)) {
+          console.error('Stage 2 NaN detected at time:', time, 'state:', newState);
+          break;
+        }
+        
+        state = newState;
         time += dt;
+        stepCount++;
+        
+        // Debug logging every 20 seconds
+        if (stepCount % Math.ceil(20 / dt) === 0) {
+          console.log(`Stage 2 t=${time.toFixed(1)}s: alt=${(state.altitude/1000).toFixed(2)}km, vel=${state.velocity.toFixed(1)}m/s, mass=${(state.mass/1000).toFixed(1)}t`);
+        }
       }
       
-      // Coast phase (engines off) - continue until orbital velocity or target altitude
+      // Coast phase (engines off) - continue for a short period
       console.log('Coast phase...');
-      const coastEndTime = time + 600; // 10 minutes coast maximum
-      while (time <= coastEndTime && state.altitude >= 0 && state.velocity < requiredOrbitalVelocity * 0.95 && time < maxSimulationTime) {
+      const coastEndTime = time + 60; // 1 minute coast
+      stepCount = 0;
+      const maxStepsCoast = Math.ceil(60 / dt) + 10;
+      
+      while (time < coastEndTime && state.altitude >= 0 && stepCount < maxStepsCoast) {
         // Calculate current acceleration (no thrust)
         const gravity = getGravityAtAltitude(state.altitude);
         const dragForce = getDragForce(Math.abs(state.velocity), state.altitude, rocketSpecs.dragCoefficient);
@@ -313,7 +399,7 @@ export const useSimulation = () => {
         const netAcceleration = -gravity + dragAcceleration;
         
         trajectoryData.push({
-          time,
+          time: parseFloat(time.toFixed(2)),
           altitude: Math.max(0, state.altitude),
           velocity: state.velocity,
           acceleration: netAcceleration,
@@ -326,7 +412,7 @@ export const useSimulation = () => {
         });
         
         // RK4 integration step (no thrust)
-        state = rk4Step(
+        const newState = rk4Step(
           state,
           time,
           dt,
@@ -336,13 +422,14 @@ export const useSimulation = () => {
           false
         );
         
-        time += dt;
-        
-        // Stop if we've reached target conditions
-        if (state.altitude >= targetAltitude && state.velocity >= requiredOrbitalVelocity * 0.9) {
-          console.log('Target orbital conditions achieved!');
+        if (isNaN(newState.velocity) || isNaN(newState.altitude) || isNaN(newState.mass)) {
+          console.error('Coast phase NaN detected at time:', time, 'state:', newState);
           break;
         }
+        
+        state = newState;
+        time += dt;
+        stepCount++;
       }
       
       const finalVelocity = state.velocity;
@@ -355,8 +442,14 @@ export const useSimulation = () => {
       console.log(`Required orbital velocity: ${requiredOrbitalVelocity.toFixed(2)}m/s`);
       console.log(`Velocity achievement: ${((finalVelocity/requiredOrbitalVelocity)*100).toFixed(1)}%`);
       console.log(`Total flight time: ${totalFlightTime.toFixed(1)}s`);
+      console.log(`Total trajectory points: ${trajectoryData.length}`);
       
-      // Generate plot data
+      // Validate trajectory data
+      if (trajectoryData.length === 0) {
+        throw new Error('No trajectory data generated');
+      }
+      
+      // Generate plot data with validation
       const plots: PlotData = {
         altitude: trajectoryData.map(p => ({ time: p.time, value: p.altitude, stage: p.stage })),
         velocity: trajectoryData.map(p => ({ time: p.time, value: p.velocity, stage: p.stage })),
@@ -367,16 +460,16 @@ export const useSimulation = () => {
         stage2Trajectory: trajectoryData.filter(p => p.stage === 2).map(p => ({ time: p.time, value: p.altitude }))
       };
       
-      // Calculate performance metrics
+      // Calculate performance metrics with validation
       const maxAltitudePoint = trajectoryData.reduce((max, point) => 
         point.altitude > max.altitude ? point : max
       );
       
-      const launchAngle = Math.atan2(targetAltitude, state.downrange) * 180 / Math.PI;
+      const launchAngle = state.downrange > 0 ? Math.atan2(targetAltitude, state.downrange) * 180 / Math.PI : 45;
       
       const optimalParams: OptimalParameters = {
         requiredVelocity: requiredOrbitalVelocity,
-        launchAngle,
+        launchAngle: isNaN(launchAngle) ? 45 : launchAngle,
         stage1OptimalBurnTime: rocketSpecs.stage1BurnTime,
         stage2OptimalBurnTime: rocketSpecs.stage2BurnTime,
         maxAltitude: maxAltitudePoint.altitude,
