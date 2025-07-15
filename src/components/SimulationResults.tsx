@@ -8,7 +8,13 @@ interface SimulationResultsProps {
 }
 
 export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) => {
-  if (!result) return null;
+  if (!result || !result.plots) {
+    return (
+      <div className="text-center py-16">
+        <div className="text-gray-400">No simulation data available</div>
+      </div>
+    );
+  }
 
   const { plots, optimalParams } = result;
 
@@ -19,10 +25,14 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
     textColor: '#e5e7eb'
   };
 
-  const StatCard: React.FC<{ icon: React.ReactNode; title: string; value: string | number; unit?: string; color?: string }> = ({ 
-    icon, title, value, unit, color = 'bg-red-600' 
-  }) => (
-    <div className="bg-transparent-800 p-4 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+  const StatCard: React.FC<{ 
+    icon: React.ReactNode; 
+    title: string; 
+    value: string | number; 
+    unit?: string; 
+    color?: string 
+  }> = ({ icon, title, value, unit, color = 'bg-red-600' }) => (
+    <div className="bg-gray-800/50 backdrop-blur-sm p-4 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
       <div className="flex items-center gap-3 mb-2">
         <div className={`p-2 ${color} rounded-lg`}>
           {icon}
@@ -37,7 +47,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
   );
 
   const ChartContainer: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div className="bg-transparent backdrop-blur-sm p-6 rounded-xl border border-gray-700">
+    <div className="bg-gray-800/30 backdrop-blur-sm p-6 rounded-xl border border-gray-700">
       <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
       <div className="h-80">
         {children}
@@ -45,10 +55,19 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
     </div>
   );
 
+  // Ensure we have valid data
+  if (!plots.altitude || plots.altitude.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <div className="text-red-400">Invalid simulation data</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      {/* Optimal Parameters */}
-      <div className="bg-transparent border border-gray-700 rounded-xl p-6">
+      {/* Performance Metrics */}
+      <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-3 bg-red-600 rounded-lg">
             <Target className="w-8 h-8 text-white" />
@@ -58,6 +77,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
             <p className="text-gray-400">Calculated optimal values and performance metrics</p>
           </div>
         </div>
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             icon={<TrendingUp className="w-5 h-5 text-white" />}
@@ -114,9 +134,9 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
         </div>
       </div>
 
-      {/* Performance Charts */}
+      {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <ChartContainer title="Altitude vs Time (Two-Stage)">
+        <ChartContainer title="Altitude vs Time">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.altitude}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
@@ -128,7 +148,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
               <YAxis 
                 stroke={chartConfig.textColor}
                 tick={{ fill: chartConfig.textColor }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => `${(value / 1000).toFixed(0)}km`}
               />
               <Tooltip
                 contentStyle={{
@@ -156,7 +176,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title="Velocity vs Time (Two-Stage)">
+        <ChartContainer title="Velocity vs Time">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.velocity}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
@@ -195,7 +215,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title="Acceleration vs Time (Two-Stage)">
+        <ChartContainer title="Acceleration vs Time">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.acceleration}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
@@ -234,7 +254,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title="Thrust vs Time (Two-Stage)">
+        <ChartContainer title="Thrust vs Time">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.thrust}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
@@ -246,7 +266,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
               <YAxis 
                 stroke={chartConfig.textColor}
                 tick={{ fill: chartConfig.textColor }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => `${(value / 1000000).toFixed(1)}MN`}
               />
               <Tooltip
                 contentStyle={{
@@ -256,7 +276,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
                   color: chartConfig.textColor
                 }}
                 formatter={(value: any) => [
-                  `${(Number(value) / 1000).toFixed(0)} kN`,
+                  `${(Number(value) / 1000000).toFixed(2)} MN`,
                   'Thrust'
                 ]}
                 labelFormatter={(label) => `Time: ${label}s`}
@@ -274,7 +294,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title="Mass vs Time (Two-Stage)">
+        <ChartContainer title="Mass vs Time">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={plots.mass}>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
@@ -314,9 +334,9 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
           </ResponsiveContainer>
         </ChartContainer>
 
-        <ChartContainer title="Stage Trajectories Comparison">
+        <ChartContainer title="Stage Comparison">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={plots.altitude}>
+            <LineChart>
               <CartesianGrid strokeDasharray="3 3" stroke={chartConfig.gridStroke} />
               <XAxis 
                 dataKey="time" 
@@ -326,7 +346,7 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
               <YAxis 
                 stroke={chartConfig.textColor}
                 tick={{ fill: chartConfig.textColor }}
-                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value) => `${(value / 1000).toFixed(0)}km`}
               />
               <Tooltip
                 contentStyle={{
@@ -335,26 +355,25 @@ export const SimulationResults: React.FC<SimulationResultsProps> = ({ result }) 
                   borderRadius: '8px',
                   color: chartConfig.textColor
                 }}
-                formatter={(value: any) => [`${(Number(value) / 1000).toFixed(2)} km`, 'Altitude']}
               />
               <Legend />
               <Line
-                data={plots.altitude.filter(point => point.stage === 1)}
+                data={plots.stage1Trajectory}
                 type="monotone"
                 dataKey="value"
                 stroke="#f97316"
                 strokeWidth={3}
                 dot={false}
-                name="Stage 1 Trajectory"
+                name="Stage 1"
               />
               <Line
-                data={plots.altitude.filter(point => point.stage === 2)}
+                data={plots.stage2Trajectory}
                 type="monotone"
                 dataKey="value"
                 stroke="#3b82f6"
                 strokeWidth={3}
                 dot={false}
-                name="Stage 2 Trajectory"
+                name="Stage 2"
               />
             </LineChart>
           </ResponsiveContainer>
