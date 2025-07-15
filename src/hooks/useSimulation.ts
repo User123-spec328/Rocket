@@ -187,61 +187,73 @@ const getPropulsionProperties = (
 };
 
 // ============================================================================
-// ADVANCED TRAJECTORY GUIDANCE (GRAVITY TURN + PEG)
+// ORBITAL MECHANICS AND TRAJECTORY GUIDANCE
 // ============================================================================
 const getOptimalFlightPath = (
   time: number, 
   altitude: number, 
   velocity: number, 
   targetAltitude: number,
-  stage: number
+  stage: number,
+  requiredOrbitalVelocity: number
 ): { angle: number; pitchRate: number; guidance: string } => {
   
-  // Initial vertical flight phase
-  if (time < 8.0) {
+  // Initial vertical flight phase (gravity turn start)
+  if (time < 10.0) {
     return { angle: Math.PI / 2, pitchRate: 0, guidance: "VERTICAL_ASCENT" };
   }
   
-  // Gravity turn initiation
-  if (time < 15.0) {
-    const progress = (time - 8.0) / 7.0;
-    const angle = (Math.PI / 2) * (1 - 0.1 * progress); // Gentle pitch-over
-    return { angle, pitchRate: -0.01, guidance: "PITCH_INITIATION" };
+  // Gravity turn initiation - gradual pitch over
+  if (time < 20.0) {
+    const progress = (time - 10.0) / 10.0;
+    const angle = (Math.PI / 2) * (1 - 0.15 * progress); // More gradual pitch-over
+    return { angle, pitchRate: -0.008, guidance: "GRAVITY_TURN_START" };
   }
   
-  // Powered Explicit Guidance (PEG) - simplified
-  const altitudeFraction = altitude / targetAltitude;
-  const velocityFraction = velocity / 7800; // Approximate orbital velocity
+  // Calculate current orbital parameters
+  const currentRadius = PHYSICS_CONSTANTS.EARTH_RADIUS + altitude;
+  const targetRadius = PHYSICS_CONSTANTS.EARTH_RADIUS + targetAltitude;
+  const currentOrbitalVelocity = Math.sqrt(PHYSICS_CONSTANTS.G * PHYSICS_CONSTANTS.EARTH_MASS / currentRadius);
+  
+  // Velocity-based guidance for orbital insertion
+  const velocityRatio = velocity / requiredOrbitalVelocity;
+  const altitudeRatio = altitude / targetAltitude;
   
   let targetAngle: number;
   
   if (stage === 1) {
-    // Stage 1: Focus on altitude gain with gradual pitch-over
-    if (altitude < 10000) {
-      targetAngle = Math.PI * 0.4; // 72 degrees
-    } else if (altitude < 30000) {
+    // Stage 1: Balanced ascent profile
+    if (altitude < 20000) {
+      targetAngle = Math.PI * 0.42; // 75.6 degrees
+    } else if (altitude < 50000) {
       targetAngle = Math.PI * 0.35; // 63 degrees
     } else {
-      targetAngle = Math.PI * 0.25; // 45 degrees
+      targetAngle = Math.PI * 0.28; // 50.4 degrees
     }
   } else {
-    // Stage 2: Focus on velocity gain (more horizontal)
-    if (altitude < 80000) {
-      targetAngle = Math.PI * 0.2; // 36 degrees
-    } else if (altitude < 150000) {
-      targetAngle = Math.PI * 0.1; // 18 degrees
+    // Stage 2: Orbital insertion focus
+    if (altitude < targetAltitude * 0.3) {
+      targetAngle = Math.PI * 0.25; // 45 degrees
+    } else if (altitude < targetAltitude * 0.7) {
+      // Transition to more horizontal flight
+      const progress = (altitude - targetAltitude * 0.3) / (targetAltitude * 0.4);
+      targetAngle = Math.PI * (0.25 - 0.15 * progress); // 45° to 18°
     } else {
-      targetAngle = Math.PI * 0.05; // 9 degrees (nearly horizontal)
+      // Near target altitude - focus on velocity
+      if (velocityRatio < 0.8) {
+        targetAngle = Math.PI * 0.08; // 14.4 degrees - more horizontal
+      } else {
+        targetAngle = Math.PI * 0.05; // 9 degrees - nearly horizontal
+      }
     }
   }
   
-  // Smooth angle transition
-  const pitchRate = -0.005; // Gradual pitch-over rate
+  const pitchRate = -0.003; // Smooth pitch-over rate
   
   return { 
     angle: targetAngle, 
     pitchRate, 
-    guidance: stage === 1 ? "GRAVITY_TURN_S1" : "HORIZONTAL_INSERTION_S2" 
+    guidance: stage === 1 ? "ASCENT_PROFILE_S1" : "ORBITAL_INSERTION_S2" 
   };
 };
 
@@ -266,7 +278,7 @@ interface EnhancedDerivativeVector {
 }
 
 // ============================================================================
-// INDUSTRY-GRADE RK4 INTEGRATION WITH ADAPTIVE STEPPING
+// INDUSTRY-GRADE RK4 INTEGRATION WITH ORBITAL MECHANICS
 // ============================================================================
 const calculateEnhancedDerivatives = (
   state: EnhancedStateVector,
@@ -277,7 +289,8 @@ const calculateEnhancedDerivatives = (
   latitude: number,
   isEngineOn: boolean,
   stage: number,
-  targetAltitude: number
+  targetAltitude: number,
+  requiredOrbitalVelocity: number
 ): EnhancedDerivativeVector => {
   
   const altitude = state.position.y;
@@ -305,14 +318,14 @@ const calculateEnhancedDerivatives = (
   const drag = getDragProperties(speed, altitude, dragCoeff, referenceArea);
   
   // Flight path guidance
-  const guidance = getOptimalFlightPath(state.time, altitude, speed, targetAltitude, stage);
+  const guidance = getOptimalFlightPath(state.time, altitude, speed, targetAltitude, stage, requiredOrbitalVelocity);
   
   // Force calculations
   const thrustForce = propulsion.thrust;
   const dragForce = drag.dragForce;
   const gravityForce = state.mass * gravity.magnitude;
   
-  // Unit vectors
+  // Unit vectors for thrust direction
   const sinAngle = Math.sin(state.flightPathAngle);
   const cosAngle = Math.cos(state.flightPathAngle);
   
@@ -325,13 +338,17 @@ const calculateEnhancedDerivatives = (
   
   const gravityAccelY = -gravity.magnitude;
   
+  // Centrifugal acceleration for orbital mechanics
+  const currentRadius = PHYSICS_CONSTANTS.EARTH_RADIUS + altitude;
+  const centrifugalAccelY = altitude > 50000 ? (state.velocity.vx * state.velocity.vx) / currentRadius : 0;
+  
   // Net accelerations
   const netAccelX = thrustAccelX + dragAccelX;
-  const netAccelY = thrustAccelY + dragAccelY + gravityAccelY;
+  const netAccelY = thrustAccelY + dragAccelY + gravityAccelY + centrifugalAccelY;
   
-  // Flight path angle rate (guidance-driven)
+  // Flight path angle rate (guidance-driven with orbital mechanics)
   const angleError = guidance.angle - state.flightPathAngle;
-  const angleRate = Math.sign(angleError) * Math.min(Math.abs(angleError) * 0.1, 0.02); // Smooth guidance
+  const angleRate = Math.sign(angleError) * Math.min(Math.abs(angleError) * 0.08, 0.015);
   
   return {
     dPosition: {
@@ -360,11 +377,12 @@ const enhancedRK4Step = (
   latitude: number,
   isEngineOn: boolean,
   stage: number,
-  targetAltitude: number
+  targetAltitude: number,
+  requiredOrbitalVelocity: number
 ): EnhancedStateVector => {
   
   // RK4 coefficients
-  const k1 = calculateEnhancedDerivatives(state, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude);
+  const k1 = calculateEnhancedDerivatives(state, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude, requiredOrbitalVelocity);
   
   const state2: EnhancedStateVector = {
     position: {
@@ -383,7 +401,7 @@ const enhancedRK4Step = (
     time: state.time + 0.5 * dt
   };
   
-  const k2 = calculateEnhancedDerivatives(state2, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude);
+  const k2 = calculateEnhancedDerivatives(state2, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude, requiredOrbitalVelocity);
   
   const state3: EnhancedStateVector = {
     position: {
@@ -402,7 +420,7 @@ const enhancedRK4Step = (
     time: state.time + 0.5 * dt
   };
   
-  const k3 = calculateEnhancedDerivatives(state3, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude);
+  const k3 = calculateEnhancedDerivatives(state3, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude, requiredOrbitalVelocity);
   
   const state4: EnhancedStateVector = {
     position: {
@@ -421,7 +439,7 @@ const enhancedRK4Step = (
     time: state.time + dt
   };
   
-  const k4 = calculateEnhancedDerivatives(state4, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude);
+  const k4 = calculateEnhancedDerivatives(state4, thrust, isp, dragCoeff, referenceArea, latitude, isEngineOn, stage, targetAltitude, requiredOrbitalVelocity);
   
   // Final RK4 integration
   const newState: EnhancedStateVector = {
@@ -445,7 +463,56 @@ const enhancedRK4Step = (
 };
 
 // ============================================================================
-// MAIN SIMULATION HOOK
+// ORBITAL INSERTION AND CIRCULARIZATION
+// ============================================================================
+const performOrbitalInsertion = (
+  state: EnhancedStateVector,
+  targetAltitude: number,
+  requiredOrbitalVelocity: number,
+  dt: number,
+  rocketSpecs: any,
+  referenceArea: number,
+  latitude: number
+): { newState: EnhancedStateVector; insertionBurn: boolean } => {
+  
+  const currentSpeed = Math.sqrt(state.velocity.vx * state.velocity.vx + state.velocity.vy * state.velocity.vy);
+  const altitudeError = Math.abs(state.position.y - targetAltitude);
+  const velocityDeficit = requiredOrbitalVelocity - currentSpeed;
+  
+  // Check if we need orbital insertion burn
+  const needsInsertionBurn = (
+    state.position.y >= targetAltitude * 0.9 && 
+    velocityDeficit > 100 && 
+    state.mass > 5000
+  );
+  
+  if (needsInsertionBurn) {
+    // Perform orbital insertion burn
+    const insertionThrust = rocketSpecs.stage2Thrust * 0.8; // Reduced thrust for precision
+    const insertionISP = rocketSpecs.stage2ISP * 1.1; // Higher efficiency in vacuum
+    
+    const newState = enhancedRK4Step(
+      state,
+      dt,
+      insertionThrust,
+      insertionISP,
+      rocketSpecs.dragCoefficient,
+      referenceArea,
+      latitude,
+      true,
+      2,
+      targetAltitude,
+      requiredOrbitalVelocity
+    );
+    
+    return { newState, insertionBurn: true };
+  }
+  
+  return { newState: state, insertionBurn: false };
+};
+
+// ============================================================================
+// MAIN SIMULATION HOOK WITH ORBITAL MECHANICS
 // ============================================================================
 export const useSimulation = () => {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
@@ -458,7 +525,7 @@ export const useSimulation = () => {
     setError(null);
 
     try {
-      console.log('🚀 INDUSTRY-GRADE ROCKET SIMULATION INITIATED');
+      console.log('🚀 ORBITAL INSERTION SIMULATION INITIATED');
       console.log('📊 Input Parameters:', params);
       
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -473,13 +540,14 @@ export const useSimulation = () => {
       const earthRotationBonus = PHYSICS_CONSTANTS.EARTH_ROTATION_RATE * PHYSICS_CONSTANTS.EARTH_RADIUS * Math.cos(latitude * Math.PI / 180);
       const effectiveRequiredVelocity = requiredOrbitalVelocity - earthRotationBonus;
       
-      console.log(`🎯 Target: ${targetAltitude/1000}km orbit`);
-      console.log(`⚡ Required velocity: ${effectiveRequiredVelocity.toFixed(2)} m/s`);
+      console.log(`🎯 Target: ${targetAltitude/1000}km circular orbit`);
+      console.log(`⚡ Required orbital velocity: ${requiredOrbitalVelocity.toFixed(2)} m/s`);
       console.log(`🌍 Earth rotation bonus: ${earthRotationBonus.toFixed(2)} m/s`);
+      console.log(`🎯 Effective required velocity: ${effectiveRequiredVelocity.toFixed(2)} m/s`);
       
       // Enhanced simulation parameters
-      const dt = 0.25; // High-precision time step
-      const maxSimulationTime = 1200; // 20 minutes max
+      const dt = 0.5; // Balanced time step for accuracy and performance
+      const maxSimulationTime = 1500; // 25 minutes max
       
       // Initialize enhanced state vector
       let state: EnhancedStateVector = {
@@ -496,13 +564,17 @@ export const useSimulation = () => {
       let separationAltitude = 0;
       let maxDynamicPressure = 0;
       let maxAcceleration = 0;
+      let orbitalInsertionComplete = false;
       
-      console.log('🔥 STAGE 1 IGNITION - Main Engine Start');
+      console.log('🔥 STAGE 1 IGNITION - Ascent Phase');
       
       // ========================================================================
-      // STAGE 1 SIMULATION - ENHANCED PHYSICS
+      // STAGE 1 SIMULATION - ASCENT TO SEPARATION
       // ========================================================================
-      while (state.time < rocketSpecs.stage1BurnTime && state.position.y >= 0 && state.time < maxSimulationTime) {
+      let stepCount = 0;
+      const maxSteps = Math.ceil(rocketSpecs.stage1BurnTime / dt) + 100;
+      
+      while (state.time < rocketSpecs.stage1BurnTime && state.position.y >= 0 && stepCount < maxSteps) {
         
         // Calculate current flight properties
         const speed = Math.sqrt(state.velocity.vx * state.velocity.vx + state.velocity.vy * state.velocity.vy);
@@ -545,12 +617,15 @@ export const useSimulation = () => {
           latitude,
           true,
           1,
-          targetAltitude
+          targetAltitude,
+          effectiveRequiredVelocity
         );
         
+        stepCount++;
+        
         // Progress logging
-        if (Math.floor(state.time) % 20 === 0 && Math.floor(state.time) !== Math.floor(state.time - dt)) {
-          console.log(`⏱️  t=${state.time.toFixed(1)}s: Alt=${(state.position.y/1000).toFixed(2)}km, Vel=${speed.toFixed(1)}m/s, Mass=${(state.mass/1000).toFixed(1)}t, Mach=${drag.machNumber.toFixed(2)}`);
+        if (Math.floor(state.time) % 25 === 0 && Math.floor(state.time) !== Math.floor(state.time - dt)) {
+          console.log(`⏱️  t=${state.time.toFixed(1)}s: Alt=${(state.position.y/1000).toFixed(2)}km, Vel=${speed.toFixed(1)}m/s, Angle=${(state.flightPathAngle * 180/Math.PI).toFixed(1)}°`);
         }
       }
       
@@ -562,20 +637,21 @@ export const useSimulation = () => {
       console.log(`🔄 STAGE SEPARATION at t=${separationTime.toFixed(1)}s`);
       console.log(`   Altitude: ${(separationAltitude/1000).toFixed(2)}km`);
       console.log(`   Velocity: ${separationVelocity.toFixed(2)}m/s`);
-      console.log(`   Max Q: ${(maxDynamicPressure/1000).toFixed(1)} kPa`);
-      console.log(`   Max Accel: ${maxAcceleration.toFixed(1)}g`);
+      console.log(`   Flight path angle: ${(state.flightPathAngle * 180/Math.PI).toFixed(1)}°`);
       
       // Update mass for stage 2
       state.mass = rocketSpecs.stageSeparationMass;
       
-      console.log('🔥 STAGE 2 IGNITION - Upper Stage Start');
+      console.log('🔥 STAGE 2 IGNITION - Orbital Insertion Phase');
       
       // ========================================================================
       // STAGE 2 SIMULATION - ORBITAL INSERTION
       // ========================================================================
       const stage2EndTime = separationTime + rocketSpecs.stage2BurnTime;
+      stepCount = 0;
+      const maxSteps2 = Math.ceil(rocketSpecs.stage2BurnTime / dt) + 100;
       
-      while (state.time < stage2EndTime && state.position.y >= 0 && state.time < maxSimulationTime) {
+      while (state.time < stage2EndTime && state.position.y >= 0 && stepCount < maxSteps2) {
         
         const speed = Math.sqrt(state.velocity.vx * state.velocity.vx + state.velocity.vy * state.velocity.vy);
         const atm = getAtmosphericProperties(state.position.y);
@@ -610,34 +686,57 @@ export const useSimulation = () => {
           latitude,
           true,
           2,
-          targetAltitude
+          targetAltitude,
+          effectiveRequiredVelocity
         );
         
-        if (Math.floor(state.time) % 30 === 0 && Math.floor(state.time) !== Math.floor(state.time - dt)) {
-          console.log(`⏱️  t=${state.time.toFixed(1)}s: Alt=${(state.position.y/1000).toFixed(2)}km, Vel=${speed.toFixed(1)}m/s, Mass=${(state.mass/1000).toFixed(1)}t`);
+        stepCount++;
+        
+        if (Math.floor(state.time) % 40 === 0 && Math.floor(state.time) !== Math.floor(state.time - dt)) {
+          console.log(`⏱️  t=${state.time.toFixed(1)}s: Alt=${(state.position.y/1000).toFixed(2)}km, Vel=${speed.toFixed(1)}m/s, Angle=${(state.flightPathAngle * 180/Math.PI).toFixed(1)}°`);
         }
       }
       
       // ========================================================================
-      // COAST PHASE - BALLISTIC TRAJECTORY
+      // ORBITAL INSERTION AND CIRCULARIZATION PHASE
       // ========================================================================
-      console.log('🌌 COAST PHASE - Ballistic Flight');
-      const coastEndTime = state.time + 120; // 2 minutes coast
+      console.log('🌌 ORBITAL INSERTION - Circularization Burns');
+      const insertionEndTime = state.time + 300; // 5 minutes for orbital insertion
+      stepCount = 0;
+      const maxSteps3 = Math.ceil(300 / dt) + 100;
       
-      while (state.time < coastEndTime && state.position.y >= 0) {
+      while (state.time < insertionEndTime && state.position.y >= 0 && stepCount < maxSteps3) {
         const speed = Math.sqrt(state.velocity.vx * state.velocity.vx + state.velocity.vy * state.velocity.vy);
+        
+        // Perform orbital insertion if needed
+        const insertion = performOrbitalInsertion(
+          state,
+          targetAltitude,
+          effectiveRequiredVelocity,
+          dt,
+          rocketSpecs,
+          referenceArea,
+          latitude
+        );
+        
+        state = insertion.newState;
+        
+        if (insertion.insertionBurn) {
+          orbitalInsertionComplete = true;
+        }
+        
         const gravity = getGravityVector(state.position.y, latitude);
         const drag = getDragProperties(speed, state.position.y, rocketSpecs.dragCoefficient, referenceArea);
-        
-        const dragAccel = drag.dragForce / state.mass;
-        const netAccel = -gravity.magnitude - dragAccel;
+        const netAccel = insertion.insertionBurn ? 
+          (rocketSpecs.stage2Thrust * 0.8) / state.mass - gravity.magnitude - drag.dragForce / state.mass :
+          -gravity.magnitude - drag.dragForce / state.mass;
         
         trajectoryData.push({
           time: parseFloat(state.time.toFixed(3)),
           altitude: state.position.y,
           velocity: speed,
           acceleration: netAccel,
-          thrust: 0,
+          thrust: insertion.insertionBurn ? rocketSpecs.stage2Thrust * 0.8 : 0,
           mass: state.mass,
           x: state.position.x,
           y: state.position.y,
@@ -645,18 +744,14 @@ export const useSimulation = () => {
           stage: 2
         });
         
-        state = enhancedRK4Step(
-          state,
-          dt,
-          0,
-          rocketSpecs.stage2ISP,
-          rocketSpecs.dragCoefficient,
-          referenceArea,
-          latitude,
-          false,
-          2,
-          targetAltitude
-        );
+        stepCount++;
+        
+        // Check if orbit is achieved
+        const currentOrbitalVelocity = Math.sqrt(PHYSICS_CONSTANTS.G * PHYSICS_CONSTANTS.EARTH_MASS / (PHYSICS_CONSTANTS.EARTH_RADIUS + state.position.y));
+        if (speed >= currentOrbitalVelocity * 0.95 && state.position.y >= targetAltitude * 0.95) {
+          console.log('🎯 ORBITAL VELOCITY ACHIEVED!');
+          break;
+        }
       }
       
       // ========================================================================
@@ -668,13 +763,14 @@ export const useSimulation = () => {
       const velocityAchievement = (finalSpeed / effectiveRequiredVelocity) * 100;
       const downrange = state.position.x;
       
-      console.log('🎯 MISSION ANALYSIS COMPLETE');
+      console.log('🎯 ORBITAL INSERTION ANALYSIS COMPLETE');
       console.log(`   Final Altitude: ${(finalAltitude/1000).toFixed(2)}km`);
       console.log(`   Final Velocity: ${finalSpeed.toFixed(2)}m/s`);
       console.log(`   Required Velocity: ${effectiveRequiredVelocity.toFixed(2)}m/s`);
-      console.log(`   Achievement: ${velocityAchievement.toFixed(1)}%`);
+      console.log(`   Orbital Achievement: ${velocityAchievement.toFixed(1)}%`);
       console.log(`   Downrange: ${(downrange/1000).toFixed(2)}km`);
       console.log(`   Flight Time: ${totalFlightTime.toFixed(1)}s`);
+      console.log(`   Orbital Insertion: ${orbitalInsertionComplete ? 'SUCCESS' : 'PARTIAL'}`);
       console.log(`   Data Points: ${trajectoryData.length}`);
       
       // Generate comprehensive plot data
@@ -718,11 +814,11 @@ export const useSimulation = () => {
       };
       
       setSimulation(result);
-      console.log('✅ INDUSTRY-GRADE SIMULATION COMPLETED SUCCESSFULLY');
+      console.log('✅ ORBITAL INSERTION SIMULATION COMPLETED SUCCESSFULLY');
       
     } catch (err) {
-      console.error('❌ SIMULATION ERROR:', err);
-      setError(err instanceof Error ? err.message : 'Industry simulation failed');
+      console.error('❌ ORBITAL SIMULATION ERROR:', err);
+      setError(err instanceof Error ? err.message : 'Orbital insertion simulation failed');
     } finally {
       setIsRunning(false);
     }
