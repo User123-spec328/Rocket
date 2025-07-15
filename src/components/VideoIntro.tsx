@@ -5,13 +5,6 @@ interface VideoIntroProps {
 }
 
 export const VideoIntro: React.FC<VideoIntroProps> = ({ onVideoClick }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.play().catch(console.error);
-    }
-  }, []);
 
   return (
     <div 
@@ -19,7 +12,6 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ onVideoClick }) => {
       onClick={onVideoClick}
     >
       <video
-        ref={videoRef}
         className="w-full h-full object-cover"
         loop
         muted
